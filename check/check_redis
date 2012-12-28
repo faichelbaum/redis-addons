@@ -69,19 +69,17 @@ fi
 
 # Role ?
 if [ -z $password ]; then
-    role=`(echo -ne "INFO REPLICATION\r\nQUIT\r\n") | nc -w $timeout $host $port | grep role | awk -F: '{ print $2 }'`
+    role=`(echo -ne "INFO REPLICATION\r\nQUIT\r\n") | nc -w $timeout $host $port | grep role | awk -F: '{ print $2 }' | sed 's/\s*//g'`
 else
-    role=`(echo -n "AUTH $password" ; echo -e "\r\nPING\r\nINFO REPLICATION\r\nQUIT\r\n") | nc -w $timeout $host $port | grep role | awk -F: '{ print $2 }'`
+    role=`(echo -n "AUTH $password" ; echo -e "\r\nPING\r\nINFO REPLICATION\r\nQUIT\r\n") | nc -w $timeout $host $port | grep role | awk -F: '{ print $2 }' | sed 's/\s*//g'`
 fi
-role=`echo $role | sed 's/\s*//g'`
 
 case "$role" in
     "master")
         ;;
     "slave")
         # Replication delay ?
-        delay=`(echo -n "AUTH $password" ; echo -e "\r\nPING\r\nINFO REPLICATION\r\nQUIT\r\n") | nc -w $timeout $host $port | grep master_last_io_seconds_ago | awk -F: '{ print $2 }'`
-        delay=`echo $delay | sed 's/\s*//g'`
+        delay=`(echo -n "AUTH $password" ; echo -e "\r\nPING\r\nINFO REPLICATION\r\nQUIT\r\n") | nc -w $timeout $host $port | grep master_last_io_seconds_ago | awk -F: '{ print $2 }' | sed 's/\s*//g'`
         if [ $delay -gt $crit ]; then
             echo "CRITICAL: replication delay $delay (> $crit)"
             exit $STATE_WARNING
