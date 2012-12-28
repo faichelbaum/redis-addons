@@ -1,0 +1,44 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          redis-sentinel
+# Required-Start:
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start daemon at boot time
+# Description:       Enable service provided by daemon.
+### END INIT INFO
+
+NAME="redis-sentinel"
+DAEMON="/usr/local/bin/redis-sentinel"
+
+. /lib/lsb/init-functions
+[ -f /etc/default/rcS ] && . /etc/default/rcS
+
+test -x $DAEMON || exit 0
+
+case "$1" in
+	stop)
+		log_begin_msg "Stoping Redis Sentinel..." "redis-sentinel"
+		killall -9 redis-sentinel &> /dev/null
+		log_end_msg $?
+		;;
+	start)
+		log_begin_msg "Starting Redis Sentinel..." "redis-sentinel"
+		nohup $DAEMON /etc/sentinel.conf >> /var/log/redis-sentinel.log &> /dev/null &
+		log_end_msg 0
+		;;
+        restart)
+                $0 stop
+                $0 start
+                ;;
+        status)
+                status_of_proc $DAEMON redis-sentinel
+		;;
+	*)
+		log_failure_msg "Usage: $0 <stop|start|restart|status>"
+		exit 1
+		;;
+esac
+
+exit 0

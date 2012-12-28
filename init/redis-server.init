@@ -1,0 +1,68 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          redis-server
+# Required-Start:    $redis-sentinel $syslog
+# Required-Stop:     $redis-sentinel $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start daemon at boot time
+# Description:       Enable service provided by daemon.
+### END INIT INFO
+
+NAME="redis-server"
+PIDFILE="/var/run/redis.pid"
+DAEMON="/usr/local/bin/redis-server"
+
+. /lib/lsb/init-functions
+[ -f /etc/default/rcS ] && . /etc/default/rcS
+
+test -x $DAEMON || exit 0
+
+start_redis() {
+	name=`hostname -s`
+	ip=`grep monitor /etc/sentinel.conf  | grep -v $name | awk '{ print $4 }'`
+	port=`grep monitor /etc/sentinel.conf  | grep -v $name | awk '{ print $5 }'`
+	pass=`grep masterauth /etc/redis.conf | awk '{ print $2 }'`
+	tmp=`date +%s`
+	cat << EOF > /tmp/$tmp
+auth $pass
+info replication
+EOF
+	ret=`/usr/local/bin/redis-cli -h $ip -p $port < /tmp/$tmp 2> /dev/null`
+	rm /tmp/$tmp
+	if [ "$ret" = "" ]; then
+		sed -i 's/^slaveof/#slaveof/' /etc/redis.conf
+	elif [ `echo $ret |grep role |grep master |wc -l` -eq 1 ]; then
+		sed -i "s/^#slaveof $ip/slaveof $ip/" /etc/redis.conf
+	else 
+		sed -i 's/^slaveof/#slaveof/' /etc/redis.conf
+	fi
+	$DAEMON /etc/redis.conf
+	return $?
+}
+
+case "$1" in
+	stop)
+		log_begin_msg "Stoping Redis Server..." "redis-server"
+		kill -9 `cat /var/run/redis.pid` &> /dev/null
+		log_end_msg $?
+		;;
+	start)
+		log_begin_msg "Starting Redis Server..." "redis-server"
+		start_redis
+		log_end_msg $?
+		;;
+	status)
+		status_of_proc -p $PIDFILE $DAEMON redis-server
+		;;
+	restart)
+		$0 stop
+		$0 start
+		;;
+	*)
+		log_failure_msg "Usage: $0 <stop|start|restart|status>"
+		exit 1
+		;;
+esac
+
+exit 0
