@@ -1,0 +1,100 @@
+#!/bin/bash
+# Author: Francois Aichelbaum
+# Date 12/28/2012
+# Description: check health for Redis Server 2.6
+
+STATE_OK=0
+STATE_WARNING=1
+STATE_CRITICAL=2
+STATE_UNKNOWN=3
+
+usage() {
+    cat << EOF
+usage: $0 -H \$HOSTADDRESS\$ -p \$PORT\$ -w \$ARG1\$ -c \$ARG2\$ -t \$ARG3\$ \(-P \$ARG4\$\)
+-H      hostname or IP
+-p      service port
+-w      warning in seconds for replication delay
+-c      critical in seconds for replication delay
+-t      timeout for command input
+-P      password if needed
+EOF
+    exit $STATE_CRITICAL
+}
+
+if [ $# -ne 10 ]; then
+    if [ $# -ne 12 ]; then
+        usage
+    fi
+fi
+
+while (( "$#" )); do
+    case "$1" in
+        '-H')
+            shift 
+            host=$1
+            ;;
+        '-p')
+            shift 
+            port=$1
+            ;;
+        '-w')
+            shift 
+            warn=$1
+            ;;
+        '-c') 
+            shift 
+            crit=$1
+            ;;
+        '-t')
+            shift 
+            timeout=$1
+            ;;
+        '-P')
+            shift 
+            password=$1
+            ;;
+        *)
+            usage
+            ;;
+    esac
+    shift
+done
+
+# Alive ?
+alive=`(echo -en "test\r\nquit\r\n") | nc -w $warn $host $port 2> /dev/null | wc -l`
+if [ $alive -eq 0 ]; then
+    echo "CRITICAL: redis-server is not alive"
+    exit $STATE_CRITICAL
+fi
+
+# Role ?
+if [ -z $password ]; then
+    role=`(echo -ne "INFO REPLICATION\r\nQUIT\r\n") | nc -w $timeout $host $port | grep role | awk -F: '{ print $2 }'`
+else
+    role=`(echo -n "AUTH $password" ; echo -e "\r\nPING\r\nINFO REPLICATION\r\nQUIT\r\n") | nc -w $timeout $host $port | grep role | awk -F: '{ print $2 }'`
+fi
+role=`echo $role | sed 's/\s*//g'`
+
+case "$role" in
+    "master")
+        ;;
+    "slave")
+        # Replication delay ?
+        delay=`(echo -n "AUTH $password" ; echo -e "\r\nPING\r\nINFO REPLICATION\r\nQUIT\r\n") | nc -w $timeout $host $port | grep master_last_io_seconds_ago | awk -F: '{ print $2 }'`
+        delay=`echo $delay | sed 's/\s*//g'`
+        if [ $delay -gt $crit ]; then
+            echo "CRITICAL: replication delay $delay (> $crit)"
+            exit $STATE_WARNING
+        elif [ $delay -gt $warn ]; then
+            echo "WARNING: replication delay $delay (> $warn)"
+            exit $STATE_CRITICAL
+        fi
+        ;;
+    *)
+        echo "CRITICAL: unknown role '$role'"
+        exit $STATE_CRITICAL
+        ;;
+esac
+
+echo "OK: redis-server is running fine"
+exit $STATE_OK
