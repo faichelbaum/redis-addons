@@ -61,7 +61,7 @@ while (( "$#" )); do
 done
 
 # Alive ?
-alive=`(echo -en "test\r\nquit\r\n") | nc -w $warn $host $port 2> /dev/null | wc -l`
+alive=`(echo -en "test\r\nquit\r\n") | nc -w $timeout $host $port 2> /dev/null | wc -l`
 if [ $alive -eq 0 ]; then
     echo "CRITICAL: redis-server is not alive"
     exit $STATE_CRITICAL
