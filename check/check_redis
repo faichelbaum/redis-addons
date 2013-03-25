@@ -76,6 +76,16 @@ fi
 
 case "$role" in
     "master")
+	# Split Brain ?
+	if [ -z $password ]; then
+		split=`(echo -ne "INFO REPLICATION\r\nQUIT\r\n") | nc -w $timeout $host $port | grep slave | grep online`
+	else
+		split=`(echo -n "AUTH $password" ; echo -e "\r\nPING\r\nINFO REPLICATION\r\nQUIT\r\n") | nc -w $timeout $host $port | grep slave | grep online`
+	fi
+	if [ $split -lt 1 ]; then
+		echo "CRITICAL: maybe in split brain"
+		exit $STATE_CRITICAL
+	fi
         ;;
     "slave")
         # Replication delay ?
